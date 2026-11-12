@@ -1,0 +1,27 @@
+{
+  "first_name": "TODO",
+  "last_name": "TODO",
+  "preferred_name": "TODO",
+  "email": "TODO@example.com",
+  "phone": "+1-TODO",
+  "location_city": "TODO",
+  "location_state": "TODO",
+  "school": "Colby College",
+  "degree": "Bachelor of Arts",
+  "major": "Computer Science",
+  "graduation_month": "TODO (e.g. 05)",
+  "graduation_year": "2027",
+  "gpa": "TODO",
+  "github": "https://github.com/TODO",
+  "linkedin": "https://www.linkedin.com/in/TODO",
+  "portfolio": "https://TODO",
+  "work_authorization_us": "TODO (yes/no)",
+  "requires_sponsorship": "TODO (yes/no)",
+  "willing_to_relocate": "TODO (yes/no)",
+  "earliest_start_date": "TODO (YYYY-MM-DD)",
+  "resume_path": "TODO (local path to resume PDF)",
+  "custom_answers": {
+    "why_this_company": "TODO",
+    "relocation_note": "TODO"
+  }
+}
