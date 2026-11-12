@@ -109,8 +109,15 @@ def build_fill_plan(fields: list[dict], profile: dict, use_model: bool = True) -
     else:
         unmapped.extend({"field_id": f["id"], "label": f.get("label", "")} for f in model_fields)
 
+    coverage = {
+        "total_fields": len(fields),
+        "resolved_in_code": sum(1 for f in fills if f["source"] == "code"),
+        "resolved_by_model": sum(1 for f in fills if f["source"] == "model"),
+        "needs_human_answer": len(missing),
+        "needs_human_mapping": len(unmapped),
+    }
     return {"fills": fills, "unmapped": unmapped, "missing_answers": missing,
-            "stop_before_submit": True}
+            "coverage": coverage, "stop_before_submit": True}
 
 
 def verify_filled(reread: dict[str, str], plan: dict) -> list[dict]:
@@ -140,6 +147,10 @@ def main() -> int:
     with open(args.fields) as f:
         fields = json.load(f)
     plan = build_fill_plan(fields, load_profile(args.profile), use_model=not args.no_model)
+    c = plan["coverage"]
+    print(f"coverage: {c['resolved_in_code']}/{c['total_fields']} in code, "
+          f"{c['resolved_by_model']} by model, {c['needs_human_answer']} missing answers, "
+          f"{c['needs_human_mapping']} unmapped (human to-do)", file=sys.stderr)
     text = json.dumps(plan, indent=2)
     if args.out:
         with open(args.out, "w") as f:
