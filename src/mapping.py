@@ -44,6 +44,26 @@ FIELD_ALIASES: dict[str, list[str]] = {
     "willing_to_relocate": ["willing to relocate", "are you willing to relocate", "open to relocation"],
     "earliest_start_date": ["start date", "earliest start date", "available start date", "when can you start"],
     "resume_path": ["resume", "cv", "resume/cv", "upload resume", "attach resume", "resume file"],
+    "middle_name": ["middle name", "middle initial"],
+    "full_name": ["full name", "full legal name", "legal name"],
+    "pronouns": ["pronouns", "preferred pronouns"],
+    "address_line1": ["address", "street address", "address line 1"],
+    "address_line2": ["address line 2", "apartment", "apt/suite"],
+    "location_zip": ["zip", "zip code", "postal code"],
+    "location_country": ["country", "country of residence"],
+    "current_company": ["current company", "current employer"],
+    "current_title": ["current title", "job title"],
+    "us_citizen": ["are you a u s citizen", "us citizen", "citizenship status"],
+    "desired_salary": ["desired salary", "salary expectations", "compensation expectations"],
+    "referral_source": ["how did you hear about us", "source", "referral source"],
+    "referred_by": ["referred by", "employee referral", "referral name"],
+    "age_18_or_older": ["are you 18 or older", "are you at least 18"],
+    "willing_to_travel": ["willing to travel", "are you willing to travel"],
+    "eeoc_gender": ["gender", "gender identity"],
+    "eeoc_race": ["race", "ethnicity", "race/ethnicity"],
+    "eeoc_veteran_status": ["veteran status", "are you a veteran", "protected veteran"],
+    "eeoc_disability_status": ["disability status", "do you have a disability"],
+    "cover_letter_path": ["cover letter", "upload cover letter", "attach cover letter"],
 }
 
 _PUNCT = re.compile(r"[^a-z0-9 ]+")
@@ -71,6 +91,10 @@ def map_label(label: str, cutoff: float = 0.86) -> str | None:
     n = normalize(label)
     if not n:
         return None
+    # Pass 1: the comprehensive label table (src/label_table.py), pure code.
+    from label_table import LABEL_TABLE
+    if n in LABEL_TABLE:
+        return LABEL_TABLE[n]
     if n in _ALIAS_INDEX:
         return _ALIAS_INDEX[n]
     # Containment: alias inside label or label inside alias.
