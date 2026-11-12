@@ -65,3 +65,20 @@ src/mapping.py                form-label -> answer-key mapping, pure code
 src/guard.py                  stop-before-submit enforcement
 src/fill.py                   fill plan + OpenAI fallback + second-pass verify
 ```
+
+## Form-label coverage
+
+`src/label_table.py` holds 4,500+ real ATS form-label variants (Workday,
+Greenhouse, Ashby, Lever, SmartRecruiters, Oracle/Taleo, iCIMS, Jibe) mapped
+to profile keys. It is generated systematically: per-question base phrases
+crossed with realistic phrasing patterns, all verified unique and mapping to
+valid profile keys by `tests/test_label_table.py`. Seed phrases adapted from
+the MIT-licensed [FormFilla](https://github.com/AhmadHassan-BTed/FormFilla)
+dictionary (`src/shared/dictionary/rules.json`).
+
+Resolution order on every form: (1) label table / code patterns - zero model
+spend, (2) OpenAI fallback on the cheapest model for unseen labels only,
+(3) human to-do for anything still unmapped. Each run prints a coverage
+report (code vs model vs human) so model usage can be watched trending to
+zero as the table grows.
+

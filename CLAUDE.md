@@ -71,10 +71,25 @@ them on every run.
    human - do not guess.
 
 2. **Map form labels to answers in code, not in the model.**
-   `src/mapping.py` resolves labels -> answer keys deterministically. The model
-   is only a fallback classifier for labels code couldn't map, and it may only
-   return an existing answer key - never new data. Different forms ask the same
-   thing a hundred ways; the mapping table absorbs that, the model doesn't.
+   `src/mapping.py` resolves labels -> answer keys deterministically, with
+   `src/label_table.py` (thousands of real ATS label variants) as the first
+   lookup. The model is only a fallback classifier for labels code couldn't
+   map, and it may only return an existing answer key - never new data.
+   Different forms ask the same thing a hundred ways; the mapping table
+   absorbs that, the model doesn't.
+
+   Resolution order is strict, because the point of the architecture is
+   minimizing model spend:
+   1. Table/pattern lookup -> profile value. Pure code, zero model.
+   2. Only truly unseen labels go to the model fallback, on the cheapest
+      available model (`OPENAI_MODEL`, default the cheapest tier).
+   3. Anything the model can't map with confidence becomes a human to-do
+      (`unmapped`), never a guess.
+
+   Every run ends with a coverage report (`coverage` in the fill plan and on
+   stderr): fields resolved in code vs by the model vs left to the human.
+   Watch the code share trend toward 100% as the table grows; a growing model
+   share means the table is falling behind real forms and needs new variants.
 
 3. **Always run a second pass.** After filling, re-read every field from the
    page and compare it against the plan with `verify_filled()`. First passes
