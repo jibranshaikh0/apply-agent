@@ -1,0 +1,48 @@
+name: docker
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build-and-verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build the image
+        run: docker build -t apply-agent .
+
+      - name: CLI smoke tests
+        run: |
+          docker run --rm apply-agent src/fill.py --help
+          docker run --rm apply-agent src/roles.py --help
+
+      - name: Unit tests inside the container
+        run: docker run --rm apply-agent -m unittest discover tests
+
+      - name: Stop-before-submit guard blocks final submission
+        run: |
+          docker run --rm apply-agent -c "
+          import sys; sys.path.insert(0, 'src')
+          import guard
+          assert guard.is_submit('Submit application')
+          assert guard.is_submit('Confirm and Apply')
+          assert guard.is_submit('Finalize')
+          assert not guard.is_submit('Apply now')
+          assert not guard.is_submit('Save and continue')
+          try:
+              guard.assert_not_submit('Submit application')
+              raise SystemExit('guard did not block submit')
+          except guard.SubmitBlocked:
+              pass
+          print('guard OK')
+          "
+
+      - name: Fill pipeline runs with no API key (code-only mapping)
+        run: |
+          printf '[{"id":"f1","label":"First Name","type":"text"},{"id":"f2","label":"Email","type":"text"},{"id":"f3","label":"LinkedIn Profile","type":"text"}]' > fields.json
+          docker run --rm -v "$PWD/fields.json:/app/fields.json:ro" \
+            apply-agent src/fill.py fields.json \
+            --profile answers/profile.template.json --no-model
