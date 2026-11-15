@@ -27,6 +27,43 @@ Optional, for Claude Code: the repo ships `.mcp.json` pointing at the Job
 Alerts MCP server (`https://recruiting.herakraft.co/mcp`), so role search is
 also available as MCP tools (`search_roles`, `get_role`, `list_tracks`, ...).
 
+## Docker
+
+Everything runs in one stdlib-only image; no secrets or applicant data are
+baked in. Build once:
+
+```bash
+docker build -t apply-agent .
+```
+
+Search roles (writes into a mounted `./out`):
+
+```bash
+mkdir -p out
+docker run --rm -v "$PWD/out:/app/out" apply-agent \
+  src/roles.py --level new-grad --track swe --grad 2027 --limit 60 --out out/shortlist.json
+```
+
+Build a fill plan. `answers/profile.json` (gitignored) is bind-mounted at
+runtime and the OpenAI key passes through the environment - neither is in
+the image:
+
+```bash
+docker run --rm \
+  -v "$PWD/answers/profile.json:/app/answers/profile.json:ro" \
+  -v "$PWD/fields.json:/app/fields.json:ro" \
+  -v "$PWD/out:/app/out" \
+  -e OPENAI_API_KEY \
+  apply-agent src/fill.py fields.json \
+    --profile answers/profile.json --out out/fill-plan.json
+```
+
+With no key mounted, run `--no-model` for code-only mapping. The
+stop-before-submit guard and the second-pass verify behave exactly as
+outside the container. CI (`.github/workflows/docker.yml`) rebuilds the
+image on every push and runs the unit tests plus guard and fill smoke
+checks inside it.
+
 ## Usage
 
 Search roles (2027 new-grad SWE example):
