@@ -1,0 +1,28 @@
+# VCS and CI metadata
+.git
+.github
+
+# Applicant data and secrets: runtime inputs only, never in the image
+answers/profile.json
+.env
+.env.*
+*.key
+*.pem
+*_token
+*-token
+openai*.txt
+
+# Python cache
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Run outputs
+out/
+shortlist.json
+fill-plan.json
+
+# Build files themselves
+Dockerfile
+.dockerignore
