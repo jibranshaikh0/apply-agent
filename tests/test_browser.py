@@ -50,14 +50,6 @@ EXPECTED_FIELDS = {
                 _f("age18", "Are you at least 18 years of age?", "checkbox"),
                 _f("city", "City"), _f("start", "When are you available to start?")],
 }
-# What the page must hold after fill (read back independently of browser.reread).
-EXPECTED_LANDED = {
-    "greenhouse": {"first_name": "Test", "last_name": "Person", "email": "test@example.invalid",
-                   "phone": "+1-555-0100", "why_company": "Fake motivation text.", "resume": "resume.pdf"},
-    "lever": {"full_name": "Test Person", "email": "test@example.invalid", "phone": "+1-555-0100",
-              "org": "Example Co", "linkedin": "https://linkedin.invalid/in/test-person", "source": "LinkedIn"},
-    "workday": {"work_auth": "Yes", "age18": True, "city": "Testville", "start": "2027-06-01"},
-}
 
 
 class FormScan(HTMLParser):
@@ -258,6 +250,57 @@ class TestBrowserE2E(unittest.TestCase):
                 self.assertEqual(review["errors"], [])
                 self.assertEqual(review["mismatches"], [])
                 self.assertEqual(len(review["fills_applied"]), len(plan["fills"]))
+
+    def test_second_pass_catches_value_the_page_did_not_retain(self):
+        """mismatch.html truncates email to 3 chars on input; city is retained."""
+        url = (FIXTURES / "mismatch.html").as_uri()
+        plan = {"stop_before_submit": True, "fills": [
+            {"field_id": "email", "label": "Email", "value": FAKE_PROFILE["email"]},
+            {"field_id": "city", "label": "City", "value": FAKE_PROFILE["location_city"]}]}
+        plan_path = os.path.join(self.tmp.name, "mismatch-plan.json")
+        review_path = os.path.join(self.tmp.name, "mismatch-review.json")
+        with open(plan_path, "w") as f:
+            json.dump(plan, f)
+
+        r = self.run_browser("fill", url, "--plan", plan_path, "--out", review_path)
+        self.assertEqual(r.returncode, 1, r.stderr)  # mismatches make fill exit non-zero
+        self.assertNotIn("SubmitBlocked", r.stderr)
+        with open(review_path) as f:
+            review = json.load(f)
+        self.assertEqual([(m["field_id"], m["expected"], m["actual"]) for m in review["mismatches"]],
+                         [("email", FAKE_PROFILE["email"], FAKE_PROFILE["email"][:3])])
+        self.assertEqual(review["errors"], [])  # both fills were applied; only the second pass saw the loss
+        self.assertEqual(len(review["fills_applied"]), 2)
+        self.assertTrue(review["stop_before_submit"])
+
+    def test_non_local_subrequests_are_aborted(self):
+        """external.html pulls an image from TEST-NET-3; open_page's route must abort it."""
+        import browser
+        url = (FIXTURES / "external.html").as_uri()
+        failed, finished = [], []
+        with sync_playwright() as pw:
+            real = pw.chromium.launch()
+            new_page = real.new_page
+
+            def watched_page():
+                page = new_page()
+                page.on("requestfailed", lambda req: failed.append(req.url))
+                page.on("requestfinished", lambda req: finished.append(req.url))
+                return page
+
+            real.new_page = watched_page
+            proxy = type("PW", (), {"chromium": type("C", (), {"launch": staticmethod(lambda: real)})})
+            b, page = browser.open_page(proxy, url)
+            try:
+                fields = browser.extract_fields(page)
+                broken = page.evaluate("() => { const i = document.getElementById('beacon'); "
+                                       "return i.complete && i.naturalWidth === 0; }")
+            finally:
+                b.close()
+        self.assertIn("http://203.0.113.1/pixel.png", failed)
+        self.assertFalse([u for u in finished if "203.0.113." in u], finished)
+        self.assertTrue(broken)
+        self.assertEqual([f["id"] for f in fields], ["first_name"])  # the page itself still loaded
 
 
 if __name__ == "__main__":
