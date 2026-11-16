@@ -187,7 +187,7 @@ def cmd_fill(args) -> int:
                 continue
             try:
                 apply_fill(page, field, item["value"])
-                applied.append(item["field_id"])
+                applied.append({k: item[k] for k in ("field_id", "label", "value", "source") if k in item})
             except guard.SubmitBlocked:
                 raise
             except Exception as e:  # leave it for the second pass / human
@@ -208,6 +208,7 @@ def cmd_fill(args) -> int:
         mismatches = fill.verify_filled(now, checked)
         browser.close()
     review = {"url": args.url, "fills_applied": applied, "errors": errors,
+              "coverage": plan.get("coverage"),
               "mismatches": mismatches, "unmapped": plan.get("unmapped", []),
               "missing_answers": plan.get("missing_answers", []),
               "stop_before_submit": True}
