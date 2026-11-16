@@ -30,14 +30,33 @@ except ImportError:
 
 NAMES = ["greenhouse", "lever", "workday"]
 
-# Invented person; nothing here is real applicant data.
-FAKE_PROFILE = {
-    "first_name": "Test", "last_name": "Person", "full_name": "Test Person",
-    "email": "test@example.invalid", "phone": "+1-555-0100",
-    "current_company": "Example Co", "linkedin": "https://linkedin.invalid/in/test-person",
-    "referral_source": "LinkedIn", "location_city": "Testville",
-    "earliest_start_date": "2027-06-01", "work_authorization_us": "yes",
-    "age_18_or_older": "yes", "custom_answers": {"why_this_company": "Fake motivation text."},
+# Invented person (tests/fixtures/fake_profile.json, also used by CI); no real applicant data.
+FAKE_PROFILE = json.loads((FIXTURES / "fake_profile.json").read_text())
+
+
+def _f(i, label, typ="text", options=()):
+    return {"id": i, "label": label, "type": typ, "options": list(options)}
+
+
+# What extract MUST return per fixture style (hand-written from the HTML, so a
+# regression in label/type/option detection fails instead of passing vacuously).
+EXPECTED_FIELDS = {
+    "greenhouse": [_f("first_name", "First Name *"), _f("last_name", "Last Name *"), _f("email", "Email *"),
+                   _f("phone", "Phone"), _f("resume", "Resume", "file"), _f("why_company", "Why this company?")],
+    "lever": [_f("full_name", "Full name"), _f("email", "Email"), _f("phone", "Phone"),
+              _f("org", "Current company"), _f("linkedin", "LinkedIn profile"),
+              _f("source", "How did you hear about us?", "select", ["LinkedIn", "Company website", "Job board"])],
+    "workday": [_f("work_auth", "Are you legally authorized to work in the United States?", "radio", ["Yes", "No"]),
+                _f("age18", "Are you at least 18 years of age?", "checkbox"),
+                _f("city", "City"), _f("start", "When are you available to start?")],
+}
+# What the page must hold after fill (read back independently of browser.reread).
+EXPECTED_LANDED = {
+    "greenhouse": {"first_name": "Test", "last_name": "Person", "email": "test@example.invalid",
+                   "phone": "+1-555-0100", "why_company": "Fake motivation text.", "resume": "resume.pdf"},
+    "lever": {"full_name": "Test Person", "email": "test@example.invalid", "phone": "+1-555-0100",
+              "org": "Example Co", "linkedin": "https://linkedin.invalid/in/test-person", "source": "LinkedIn"},
+    "workday": {"work_auth": "Yes", "age18": True, "city": "Testville", "start": "2027-06-01"},
 }
 
 
@@ -107,6 +126,70 @@ class TestFixturesStatic(unittest.TestCase):
             with self.subTest(fixture=name):
                 for needle in ("http://", "https://", "<script", "<link", "src="):
                     self.assertNotIn(needle, html)
+
+
+class TestStaticBehaviour(unittest.TestCase):
+    def test_plan_fills_every_expected_field_with_fake_profile(self):
+        """Every fixture field must be mapped, so E2E/CI fills genuinely exercise each control type."""
+        for name, fields in EXPECTED_FIELDS.items():
+            with self.subTest(fixture=name):
+                plan = fill.build_fill_plan(fields, FAKE_PROFILE, use_model=False)
+                self.assertEqual([i["field_id"] for i in plan["fills"]], [f["id"] for f in fields])
+                self.assertEqual(plan["unmapped"], [])
+                self.assertEqual(plan["missing_answers"], [])
+
+    def test_verify_filled_catches_mismatch(self):
+        plan = {"fills": [{"field_id": "email", "label": "Email", "value": "test@example.invalid"},
+                          {"field_id": "city", "label": "City", "value": "Testville"}]}
+        self.assertEqual(fill.verify_filled({"email": "test@example.invalid", "city": "Testville"}, plan), [])
+        bad = fill.verify_filled({"email": "tes", "city": ""}, plan)
+        self.assertEqual([(m["field_id"], m["expected"], m["actual"]) for m in bad],
+                         [("email", "test@example.invalid", "tes"), ("city", "Testville", "")])
+
+    def test_apply_fill_guard_blocks_before_touching_page(self):
+        from unittest import mock
+        import browser
+        for label, attrs in [("Submit application", {}), ("Email", {"value": "Submit"}),
+                             ("Email", {"aria-label": "Finalize"})]:
+            with self.subTest(label=label, attrs=attrs):
+                page = mock.MagicMock()
+                el = page.locator.return_value.first
+                el.get_attribute.side_effect = lambda k, a=attrs: a.get(k)
+                el.evaluate.return_value = "INPUT"
+                with self.assertRaises(guard.SubmitBlocked):
+                    browser.apply_fill(page, {"id": "x", "label": label, "type": "text"}, "v")
+                page.locator.return_value.fill.assert_not_called()
+                page.locator.return_value.check.assert_not_called()
+
+    def test_non_local_urls_refused(self):
+        import browser
+        for url in ["http://example.com/", "https://example.com/apply", "http://localhost.evil.com/",
+                    "https://127.0.0.1.evil.com/", "http://127.0.0.1@evil.com/", "ftp://localhost/x",
+                    "javascript:alert(1)", "//localhost/x", "http://10.0.0.1/", "http://[::1]/"]:
+            with self.subTest(url=url):
+                with self.assertRaises(SystemExit) as cm:
+                    browser.check_local(url)
+                self.assertIn("refused", str(cm.exception))
+        for url in ["http://localhost:8000/x", "http://127.0.0.1:8765/a.html", "file:///tmp/a.html"]:
+            with self.subTest(url=url):
+                browser.check_local(url)
+
+    def test_subrequest_filter(self):
+        import browser
+        for url in ["http://example.com/x.js", "https://203.0.113.1/p.png", "http://localhost.evil.com/"]:
+            self.assertFalse(browser._is_local(url), url)
+        for url in ["http://127.0.0.1:1/x", "file:///tmp/a.html", "data:text/plain,hi"]:
+            self.assertTrue(browser._is_local(url), url)
+
+    def test_cli_refuses_non_local_without_playwright(self):
+        """check_local runs before the lazy playwright import, so this holds everywhere."""
+        for argv in (["extract", "http://example.com/", "--out", os.devnull], ["fields", "https://example.com/"],
+                     ["fill", "http://example.com/", "--plan", os.devnull, "--out", os.devnull]):
+            with self.subTest(argv=argv):
+                r = subprocess.run([sys.executable, str(SRC / "browser.py"), *argv],
+                                   capture_output=True, text=True, timeout=60)
+                self.assertNotEqual(r.returncode, 0)
+                self.assertIn("refused", r.stderr)
 
 
 def _chromium_available() -> bool:

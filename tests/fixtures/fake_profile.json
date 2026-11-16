@@ -1,0 +1,9 @@
+{
+  "first_name": "Test", "last_name": "Person", "full_name": "Test Person",
+  "email": "test@example.invalid", "phone": "+1-555-0100",
+  "current_company": "Example Co", "linkedin": "https://linkedin.invalid/in/test-person",
+  "referral_source": "LinkedIn", "location_city": "Testville",
+  "earliest_start_date": "2027-06-01", "work_authorization_us": "yes",
+  "age_18_or_older": "yes", "custom_answers": {"why_this_company": "Fake motivation text."},
+  "resume_path": "/tmp/qa-resume.pdf"
+}

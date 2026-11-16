@@ -1,0 +1,15 @@
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Mismatch fixture (deliberately broken field)</title></head>
+<body>
+<form onsubmit="return false">
+  <label for="email">Email</label>
+  <input type="text" id="email" name="email">
+  <label for="city">City</label>
+  <input type="text" id="city" name="city">
+  <button type="button" id="final">Submit Application</button>
+</form>
+<!-- Simulates a page that eats input (masking/overlay bug): email is truncated after fill. -->
+<script>document.getElementById("email").addEventListener("input", function (e) { e.target.value = e.target.value.slice(0, 3); });</script>
+</body>
+</html>
