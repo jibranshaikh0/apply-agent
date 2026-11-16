@@ -2,8 +2,11 @@ name: docker
 
 on:
   push:
-    branches: [main]
+    branches: [main, browser-layer]
   pull_request:
+  # Only selectable in the Actions UI/CLI once this file (with this trigger)
+  # exists on the default branch.
+  workflow_dispatch:
 
 jobs:
   build-and-verify:
