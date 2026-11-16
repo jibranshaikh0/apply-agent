@@ -87,9 +87,15 @@ them. After filling, the agent re-reads the page and calls
 
 `src/browser.py` drives headless Chromium via Playwright (`pip install
 playwright && playwright install chromium`; the Docker image already has
-both). It only opens `localhost`, `127.0.0.1` or `file://` pages and aborts
+both). By default it only opens `localhost`, `127.0.0.1` or `file://` pages and aborts
 any non-local sub-request, so it runs against the synthetic fixtures in
 `tests/fixtures/` only.
+
+Pass `--live` to `extract`/`fields`/`fill` to work a real application page for
+human review: the localhost refusal lifts, the submit guard still gates every
+action, file uploads are skipped (uploads stay manual), and `fill` saves a
+full-page screenshot of the filled page (`<review>-filled.png`) before the
+browser closes. Nothing is ever submitted in either mode.
 
 ```bash
 python src/browser.py extract file://$PWD/tests/fixtures/greenhouse.html --out fields.json
