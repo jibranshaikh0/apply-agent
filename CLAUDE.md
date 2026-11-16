@@ -1,8 +1,10 @@
 # CLAUDE.md
 
 Rules for the agent building and running this job-application workflow. Two
-parts: coding behavior (from Andrej Karpathy's LLM coding guidelines) and the
-application-run rules (from "Four boring jobs I handed to AI agents, and the
+parts: coding behavior (from Andrej Karpathy's LLM coding guidelines, adapted
+from https://github.com/multica-ai/andrej-karpathy-skills at commit
+8462496b34419f20b32778610571ac723e91f94c) and the application-run rules
+(from "Four boring jobs I handed to AI agents, and the
 exact setups that worked", Ree's Runbooks, Nov 2026).
 
 ## Part 1 - Coding behavior
@@ -59,6 +61,16 @@ For multi-step tasks, state a brief plan:
 2. [Step] -> verify: [check]
 3. [Step] -> verify: [check]
 ```
+
+A success criterion must be concrete enough to check without human
+judgment. A vague target like "make it work" forces constant
+back-and-forth, because only a person can say when it is met. A
+checkable criterion (a test passes, an output matches, a command exits
+0) lets you iterate on your own until it holds.
+
+Signs the guidelines are working: diffs stay small and on-request,
+rewrites caused by over-building become rare, and questions get asked
+before the code is written rather than after it goes wrong.
 
 ## Part 2 - Application workflow rules
 
