@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Example Co - Apply (fixture)</title></head>
+<body>
+<h1>Backend Engineer at Example Co</h1>
+<form id="apply" onsubmit="return false">
+  <input type="text" id="full_name" name="name" placeholder="Full name">
+  <input type="text" id="email" name="email" aria-label="Email">
+  <input type="text" id="phone" name="phone" aria-label="Phone">
+  <input type="text" id="org" name="org" placeholder="Current company">
+  <input type="text" id="linkedin" name="urls[LinkedIn]" aria-label="LinkedIn profile">
+  <select id="source" name="source" aria-label="How did you hear about us?">
+    <option value="">Select...</option>
+    <option value="linkedin">LinkedIn</option>
+    <option value="website">Company website</option>
+    <option value="board">Job board</option>
+  </select>
+  <button type="button" id="final">Submit application</button>
+</form>
+</body>
+</html>

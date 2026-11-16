@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Example Co - Application Questions (fixture)</title></head>
+<body>
+<h1>Application Questions - Example Co</h1>
+<form id="wd_form" onsubmit="return false">
+  <fieldset>
+    <legend>Are you legally authorized to work in the United States?</legend>
+    <input type="radio" id="auth_yes" name="work_auth" value="yes" aria-labelledby="auth_yes_text">
+    <span id="auth_yes_text">Yes</span>
+    <input type="radio" id="auth_no" name="work_auth" value="no" aria-labelledby="auth_no_text">
+    <span id="auth_no_text">No</span>
+  </fieldset>
+  <div>
+    <label><input type="checkbox" id="age18" name="age18"> Are you at least 18 years of age?</label>
+  </div>
+  <div>
+    <label for="city">City</label>
+    <input type="text" id="city" name="city">
+  </div>
+  <div>
+    <label for="start">When are you available to start?</label>
+    <input type="text" id="start" name="start">
+  </div>
+  <button type="button" id="wd_next">Finalize</button>
+</form>
+</body>
+</html>
