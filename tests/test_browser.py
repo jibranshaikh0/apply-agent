@@ -235,7 +235,7 @@ class TestBrowserE2E(unittest.TestCase):
                 self.assertEqual(r.returncode, 0, r.stderr)
                 with open(fields_path) as f:
                     fields = json.load(f)
-                self.assertTrue(fields)
+                self.assertEqual(fields, EXPECTED_FIELDS[name])
 
                 plan = fill.build_fill_plan(fields, self.profile, use_model=False)
                 self.assertTrue(plan["stop_before_submit"])
