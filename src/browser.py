@@ -12,6 +12,11 @@ refused, and non-local sub-requests are aborted. Every action is gated through
 guard.assert_not_submit(). Nothing is ever submitted: the run ends with the
 form filled and a human reviews it. Playwright is imported lazily so the repo
 stays stdlib-only when this layer is unused.
+
+Live mode (--live) deliberately lifts the localhost-only refusal so a real
+application page can be filled for human review. The submit guard still gates
+every action, file uploads are skipped (uploads stay manual), and the filled
+page is screenshotted before the browser closes.
 """
 from __future__ import annotations
 
@@ -72,20 +77,28 @@ EXTRACT_JS = """() => {
 }"""
 
 
-def check_local(url: str) -> None:
+def check_local(url: str, live: bool = False) -> None:
+    if live:
+        return
     u = urlparse(url)
     if u.scheme == "file" or (u.scheme in ("http", "https") and u.hostname in LOCAL_HOSTS):
         return
-    sys.exit(f"refused: {url!r} is not local (localhost/127.0.0.1/file:// only)")
+    sys.exit(f"refused: {url!r} is not local (localhost/127.0.0.1/file:// only); pass --live to override")
 
 
-def open_page(pw, url: str):
-    """Launch a headless page restricted to local requests."""
-    check_local(url)
+def open_page(pw, url: str, live: bool = False):
+    """Launch a headless page. Local mode restricts sub-requests to local ones."""
+    check_local(url, live=live)
     browser = pw.chromium.launch()
     page = browser.new_page()
-    page.route("**/*", lambda r: r.continue_() if _is_local(r.request.url) else r.abort())
+    if not live:
+        page.route("**/*", lambda r: r.continue_() if _is_local(r.request.url) else r.abort())
     page.goto(url)
+    if live:
+        try:
+            page.wait_for_load_state("networkidle", timeout=15000)
+        except Exception:
+            pass
     return browser, page
 
 
@@ -156,10 +169,10 @@ def reread(page, fields: list[dict]) -> dict[str, str]:
 
 
 def cmd_extract(args) -> int:
-    check_local(args.url)
+    check_local(args.url, live=getattr(args, "live", False))
     from playwright.sync_api import sync_playwright
     with sync_playwright() as pw:
-        browser, page = open_page(pw, args.url)
+        browser, page = open_page(pw, args.url, live=getattr(args, "live", False))
         fields = extract_fields(page)
         browser.close()
     text = json.dumps(fields, indent=2)
@@ -172,18 +185,23 @@ def cmd_extract(args) -> int:
 
 
 def cmd_fill(args) -> int:
-    check_local(args.url)
+    live = getattr(args, "live", False)
+    check_local(args.url, live=live)
     from playwright.sync_api import sync_playwright
     with open(args.plan) as f:
         plan = json.load(f)
-    applied, errors = [], []
+    applied, errors, skipped_uploads = [], [], []
     with sync_playwright() as pw:
-        browser, page = open_page(pw, args.url)
+        browser, page = open_page(pw, args.url, live=live)
         fields = {f["id"]: f for f in extract_fields(page)}
         for item in plan["fills"]:
             field = fields.get(item["field_id"])
             if field is None:
                 errors.append({"field_id": item["field_id"], "error": "field not on page"})
+                continue
+            if live and field["type"] == "file":
+                skipped_uploads.append({"field_id": item["field_id"], "label": item.get("label"),
+                                        "reason": "uploads stay manual in live mode"})
                 continue
             try:
                 apply_fill(page, field, item["value"])
@@ -206,11 +224,17 @@ def cmd_fill(args) -> int:
                     now[i["field_id"]].lower() == str(i["value"]).strip().lower():
                 now[i["field_id"]] = str(i["value"]).strip()
         mismatches = fill.verify_filled(now, checked)
+        screenshot = None
+        if live:
+            screenshot = os.path.splitext(args.out)[0] + "-filled.png"
+            page.screenshot(path=screenshot, full_page=True)
         browser.close()
     review = {"url": args.url, "fills_applied": applied, "errors": errors,
               "coverage": plan.get("coverage"),
               "mismatches": mismatches, "unmapped": plan.get("unmapped", []),
               "missing_answers": plan.get("missing_answers", []),
+              "skipped_uploads": skipped_uploads,
+              "screenshot": screenshot,
               "stop_before_submit": True}
     with open(args.out, "w") as f:
         json.dump(review, f, indent=2)
@@ -225,14 +249,21 @@ def main() -> int:
     e = sub.add_parser("extract", help="write form fields JSON for fill.py")
     e.add_argument("url")
     e.add_argument("--out", required=True)
+    e.add_argument("--live", action="store_true",
+                   help="allow a live (non-local) page; guard still blocks submit actions")
     e.set_defaults(func=cmd_extract)
     s = sub.add_parser("fields", help="print form fields JSON to stdout")
     s.add_argument("url")
+    s.add_argument("--live", action="store_true",
+                   help="allow a live (non-local) page; guard still blocks submit actions")
     s.set_defaults(func=cmd_extract)
     f = sub.add_parser("fill", help="apply a fill plan, run the second pass, write a review")
     f.add_argument("url")
     f.add_argument("--plan", required=True)
     f.add_argument("--out", required=True)
+    f.add_argument("--live", action="store_true",
+                   help="allow a live (non-local) page; guard still blocks submit actions, "
+                        "file uploads are skipped (manual), filled page is screenshotted")
     f.set_defaults(func=cmd_fill)
     args = p.parse_args()
     return args.func(args)
