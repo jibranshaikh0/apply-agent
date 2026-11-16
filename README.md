@@ -29,7 +29,7 @@ also available as MCP tools (`search_roles`, `get_role`, `list_tracks`, ...).
 
 ## Docker
 
-Everything runs in one stdlib-only image; no secrets or applicant data are
+Everything runs in one image (stdlib app plus Playwright/Chromium for the browser layer); no secrets or applicant data are
 baked in. Build once:
 
 ```bash
@@ -82,6 +82,27 @@ python src/fill.py fields.json --profile answers/profile.json --out fill-plan.js
 fallback second), and lists fields it could not map so a human can answer
 them. After filling, the agent re-reads the page and calls
 `verify_filled()` for the mandatory second pass.
+
+## Browser layer
+
+`src/browser.py` drives headless Chromium via Playwright (`pip install
+playwright && playwright install chromium`; the Docker image already has
+both). It only opens `localhost`, `127.0.0.1` or `file://` pages and aborts
+any non-local sub-request, so it runs against the synthetic fixtures in
+`tests/fixtures/` only.
+
+```bash
+python src/browser.py extract file://$PWD/tests/fixtures/greenhouse.html --out fields.json
+python src/browser.py fields  file://$PWD/tests/fixtures/greenhouse.html   # print instead
+python src/fill.py fields.json --profile answers/profile.json --no-model --out fill-plan.json
+python src/browser.py fill file://$PWD/tests/fixtures/greenhouse.html \
+  --plan fill-plan.json --out review.json
+```
+
+`fill` applies the plan, re-reads every field for the second pass, and
+writes `review.json` with `stop_before_submit: true`. Every action goes
+through `guard.assert_not_submit()`, so the run ends with the form filled
+and never submitted. CI runs this end to end inside the image.
 
 ## The stop-before-submit guarantee
 

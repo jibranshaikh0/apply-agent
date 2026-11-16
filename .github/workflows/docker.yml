@@ -46,3 +46,40 @@ jobs:
           docker run --rm -v "$PWD/fields.json:/app/fields.json:ro" \
             apply-agent src/fill.py fields.json \
             --profile answers/profile.template.json --no-model
+
+      - name: Browser E2E tests actually run (none skipped)
+        run: |
+          docker run --rm apply-agent -m unittest discover -v -s tests -p test_browser.py 2>&1 | tee browser-tests.log
+          grep -q 'test_extract_plan_fill_verify .* ok' browser-tests.log
+          if grep -Eqi 'skipped|\.\.\. skip' browser-tests.log; then
+            echo "browser tests were skipped; Playwright/Chromium missing in image" >&2
+            exit 1
+          fi
+
+      - name: Browser smoke - extract, plan, fill, stop before submit (localhost fixtures)
+        run: |
+          docker run --rm --entrypoint sh apply-agent -c '
+          set -eu
+          python -m http.server 8765 --bind 127.0.0.1 --directory tests/fixtures >/dev/null 2>&1 &
+          SERVER=$!
+          trap "kill $SERVER" EXIT
+          for i in $(seq 1 20); do
+            python -c "import urllib.request as u; u.urlopen(\"http://127.0.0.1:8765/greenhouse.html\")" 2>/dev/null && break
+            sleep 0.5
+          done
+          for name in greenhouse lever workday; do
+            url="http://127.0.0.1:8765/$name.html"
+            python src/browser.py extract "$url" --out /tmp/$name-fields.json
+            python src/fill.py /tmp/$name-fields.json --profile answers/profile.template.json --no-model --out /tmp/$name-plan.json
+            # fill exits 1 on mismatches (template has TODO gaps); a SubmitBlocked crash writes no review.
+            python src/browser.py fill "$url" --plan /tmp/$name-plan.json --out /tmp/$name-review.json 2>/tmp/$name-err.txt || true
+            cat /tmp/$name-err.txt
+            if grep -q SubmitBlocked /tmp/$name-err.txt; then echo "guard tripped on $name" >&2; exit 1; fi
+            python -c "
+          import json, sys
+          r = json.load(open(\"/tmp/$name-review.json\"))
+          assert r[\"stop_before_submit\"] is True, r
+          print(\"$name: stop_before_submit OK, applied\", len(r[\"fills_applied\"]))
+          "
+          done
+          '
