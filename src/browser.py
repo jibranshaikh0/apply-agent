@@ -115,7 +115,9 @@ def apply_fill(page, field: dict, value) -> None:
     guard.assert_not_submit(f'{field["label"]} {_label_text(page, loc.first)}')
     kind, value = field["type"], str(value)
     if kind == "select":
-        loc.select_option(label=value)
+        opts = loc.first.evaluate("e => [...e.options].map(o => o.text.trim())")
+        match = next((o for o in opts if o.lower() == value.lower()), value)
+        loc.select_option(label=match)
     elif kind == "radio":
         for i in range(loc.count()):
             radio = loc.nth(i)
@@ -196,7 +198,14 @@ def cmd_fill(args) -> int:
             {**i, "value": os.path.basename(str(i["value"])) if fields.get(i["field_id"], {}).get("type") == "file"
              else i["value"]}
             for i in plan["fills"] if i["field_id"] in fields]}
-        mismatches = fill.verify_filled(reread(page, list(fields.values())), checked)
+        now = reread(page, list(fields.values()))
+        # Choice controls are matched case-insensitively when filling ("yes" -> "Yes"),
+        # so compare them the same way instead of reporting a false mismatch.
+        for i in checked["fills"]:
+            if fields[i["field_id"]]["type"] in ("select", "radio") and \
+                    now[i["field_id"]].lower() == str(i["value"]).strip().lower():
+                now[i["field_id"]] = str(i["value"]).strip()
+        mismatches = fill.verify_filled(now, checked)
         browser.close()
     review = {"url": args.url, "fills_applied": applied, "errors": errors,
               "mismatches": mismatches, "unmapped": plan.get("unmapped", []),
