@@ -8,7 +8,9 @@ WORKDIR /app
 # Browser layer deps. Runs as root (apt needs it) and before USER app. Browsers
 # go to a shared path so the unprivileged app user can launch them.
 ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
-RUN pip install --no-cache-dir playwright \
+# libatomic1: Playwright's bundled driver/node needs libatomic.so.1 to start, before --with-deps can run.
+RUN apt-get update && apt-get install -y --no-install-recommends libatomic1 \
+    && pip install --no-cache-dir playwright \
     && playwright install --with-deps chromium \
     && rm -rf /var/lib/apt/lists/*
 
