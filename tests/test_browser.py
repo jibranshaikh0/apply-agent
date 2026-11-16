@@ -203,12 +203,18 @@ def _chromium_available() -> bool:
         return False
 
 
-@unittest.skipUnless(HAVE_PLAYWRIGHT, "playwright not installed")
+# CI sets this so a missing Playwright/Chromium is an error, not a silent skip.
+REQUIRE_E2E = bool(os.environ.get("REQUIRE_BROWSER_E2E"))
+
+
 class TestBrowserE2E(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         if not _chromium_available():
-            raise unittest.SkipTest("chromium not available to playwright")
+            msg = "playwright/chromium not available"
+            if REQUIRE_E2E:
+                raise RuntimeError(msg + " (REQUIRE_BROWSER_E2E is set)")
+            raise unittest.SkipTest(msg)
         cls.tmp = tempfile.TemporaryDirectory()
         cls.resume = os.path.join(cls.tmp.name, "resume.pdf")
         with open(cls.resume, "wb") as f:

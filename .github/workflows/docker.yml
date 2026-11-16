@@ -47,14 +47,14 @@ jobs:
             apply-agent src/fill.py fields.json \
             --profile answers/profile.template.json --no-model
 
-      - name: Browser E2E tests actually run (none skipped)
+      - name: Browser E2E tests (must run, none skipped)
+        # REQUIRE_BROWSER_E2E turns a missing Playwright/Chromium into a test error
+        # instead of a skip. No pipe: the step fails on the test command's own exit status.
         run: |
-          docker run --rm apply-agent -m unittest discover -v -s tests -p test_browser.py 2>&1 | tee browser-tests.log
-          grep -q 'test_extract_plan_fill_verify .* ok' browser-tests.log
-          if grep -Eqi 'skipped|\.\.\. skip' browser-tests.log; then
-            echo "browser tests were skipped; Playwright/Chromium missing in image" >&2
-            exit 1
-          fi
+          status=0
+          docker run --rm -e REQUIRE_BROWSER_E2E=1 apply-agent -m unittest discover -v -s tests -p test_browser.py > browser-tests.log 2>&1 || status=$?
+          cat browser-tests.log
+          exit "$status"
 
       - name: Browser smoke - extract, plan, fill, stop before submit (localhost fixtures)
         run: |
